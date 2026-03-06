@@ -1,331 +1,5 @@
 import { useRef, useState } from 'react';
-import { X, Check } from 'lucide-react';
 import { products } from '../data/products';
-import { OrderFormData, governorates } from '../types/form';
-import styles from '../components/OrderForm.module.css';
-
-const GOOGLE_SCRIPT_URL =
-  'https://script.google.com/macros/s/AKfycby8uj_Mc166lFj9mVHIrVHUHm00SYGbjNT-7_0xzPGnEF12IYU0CiD5QZOA3771r6mW/exec';
-
-function OrderModal({
-  isOpen,
-  onClose,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-}) {
-  const [formData, setFormData] = useState<OrderFormData>({
-    name: '',
-    phone: '',
-    governorate: '',
-    area: '',
-    address: '',
-    straightQuantity: 0,
-    curvedQuantity: 0,
-    curvedGoldQuantity: 0,
-  });
-  const [errors, setErrors] = useState<Partial<Record<keyof OrderFormData, string>>>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [lastSubmitTime, setLastSubmitTime] = useState(0);
-
-  const straightRef = useRef<HTMLInputElement>(null);
-  const curvedRef = useRef<HTMLInputElement>(null);
-  const curvedGoldRef = useRef<HTMLInputElement>(null);
-
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-      ...(name === 'governorate' ? { area: '' } : {}),
-    }));
-    if (errors[name as keyof OrderFormData]) {
-      setErrors((prev) => ({ ...prev, [name]: '' }));
-    }
-  };
-
-  const validate = (): boolean => {
-    const newErrors: Partial<Record<keyof OrderFormData, string>> = {};
-    if (!formData.name.trim()) newErrors.name = 'الاسم مطلوب';
-    if (!formData.phone.trim()) newErrors.phone = 'رقم الهاتف مطلوب';
-    if (!formData.governorate) newErrors.governorate = 'المحافظة مطلوبة';
-    if (!formData.area) newErrors.area = 'المنطقة مطلوبة';
-    if (!formData.address.trim()) newErrors.address = 'العنوان مطلوب';
-
-    const straightQty = parseInt(straightRef.current?.value || '0') || 0;
-    const curvedQty = parseInt(curvedRef.current?.value || '0') || 0;
-    const curvedGoldQty = parseInt(curvedGoldRef.current?.value || '0') || 0;
-
-    if (straightQty === 0 && curvedQty === 0 && curvedGoldQty === 0) {
-      newErrors.address = 'اختر كمية من منتج واحد على الأقل';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validate()) return;
-
-    const now = Date.now();
-    if (now - lastSubmitTime < 1000) return;
-    setLastSubmitTime(now);
-    setIsSubmitting(true);
-
-    const straightQty = parseInt(straightRef.current?.value || '0') || 0;
-    const curvedQty = parseInt(curvedRef.current?.value || '0') || 0;
-    const curvedGoldQty = parseInt(curvedGoldRef.current?.value || '0') || 0;
-    const totalQuantity = straightQty + curvedQty + curvedGoldQty;
-    const totalPrice = totalQuantity * 360;
-
-    try {
-      await fetch(GOOGLE_SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: formData.name,
-          phone: formData.phone,
-          governorate: formData.governorate,
-          area: formData.area,
-          address: formData.address,
-          straightQty,
-          curvedQty,
-          curvedGoldQty,
-          totalPrice,
-          timestamp: new Date().toISOString(),
-        }),
-      });
-    } catch (_) {
-    } finally {
-      setIsSubmitting(false);
-      setShowSuccess(true);
-    }
-  };
-
-  const handleClose = () => {
-    setShowSuccess(false);
-    setFormData({
-      name: '',
-      phone: '',
-      governorate: '',
-      area: '',
-      address: '',
-      straightQuantity: 0,
-      curvedQuantity: 0,
-      curvedGoldQuantity: 0,
-    });
-    setErrors({});
-    onClose();
-  };
-
-  const areas = formData.governorate
-    ? governorates[formData.governorate as keyof typeof governorates] ?? []
-    : [];
-
-  if (!isOpen) return null;
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.55)' }}
-      onClick={handleClose}
-    >
-      <div
-        className="max-w-4xl w-full max-h-[90vh] overflow-y-auto"
-        style={{
-          background: 'rgba(36, 50, 71, 0.97)',
-          backdropFilter: 'blur(18px)',
-          WebkitBackdropFilter: 'blur(18px)',
-          border: '1px solid rgba(255,255,255,0.10)',
-          borderRadius: '16px',
-          boxShadow: '0 8px 48px rgba(0,0,0,0.35)',
-          animation: 'modalFadeIn 0.35s ease',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {showSuccess ? (
-          <div className="p-12 text-center" dir="rtl">
-            <div className="w-16 h-16 bg-emerald-500 bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Check size={32} className="text-emerald-400" />
-            </div>
-            <h3 className="text-2xl font-bold text-[#e7ddcc] mb-3" style={{ fontFamily: "'Amiri', serif" }}>
-              تم استلام طلبك
-            </h3>
-            <p className="text-[#e7ddcc] opacity-60 mb-8" style={{ fontFamily: "'Amiri', serif" }}>
-              سنتواصل معك خلال ٢٤ ساعة
-            </p>
-            <button
-              onClick={handleClose}
-              className="px-10 py-3 bg-[#e7ddcc] text-[#243247] font-semibold transition-all duration-300 hover:bg-white"
-              style={{ fontFamily: "'Cinzel', serif", letterSpacing: '0.1em', fontSize: '0.85rem' }}
-            >
-              شكراً
-            </button>
-          </div>
-        ) : (
-          <div className="relative p-8" dir="rtl">
-            <button
-              onClick={handleClose}
-              className="absolute top-4 right-4 z-10 bg-white bg-opacity-10 text-white p-2 rounded-full hover:bg-opacity-20 transition-all duration-300"
-            >
-              <X size={22} />
-            </button>
-            <h2
-              className="text-3xl md:text-4xl font-bold text-[#e7ddcc] mb-8 text-center"
-              style={{ fontFamily: "'amiri', serif" }}
-            >
-              تقديم طلب
-            </h2>
-            <form onSubmit={handleSubmit} className={styles.form}>
-              <div className={styles.fieldGroup}>
-                <label className={styles.label} style={{ fontFamily: "'Amiri', serif" }}>
-                  الاسم <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  className={styles.input}
-                  placeholder="أدخل اسمك الكامل"
-                  style={{ fontFamily: "'Amiri', serif" }}
-                />
-                {errors.name && <p className={styles.errorMessage}>{errors.name}</p>}
-              </div>
-
-              <div className={styles.fieldGroup}>
-                <label className={styles.label} style={{ fontFamily: "'Amiri', serif" }}>
-                  رقم الهاتف <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="tel"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  className={styles.input}
-                  placeholder="01xxxxxxxxx"
-                  style={{ fontFamily: "'Amiri', serif" }}
-                />
-                {errors.phone && <p className={styles.errorMessage}>{errors.phone}</p>}
-              </div>
-
-              <div className={styles.fieldGroup}>
-                <label className={styles.label} style={{ fontFamily: "'Amiri', serif" }}>
-                  المحافظة <span className="text-red-400">*</span>
-                </label>
-                <select
-                  name="governorate"
-                  value={formData.governorate}
-                  onChange={handleChange}
-                  className={styles.select}
-                  style={{ fontFamily: "'Amiri', serif" }}
-                >
-                  <option value="">اختر المحافظة</option>
-                  {Object.keys(governorates).map((gov) => (
-                    <option key={gov} value={gov}>{gov}</option>
-                  ))}
-                </select>
-                {errors.governorate && <p className={styles.errorMessage}>{errors.governorate}</p>}
-              </div>
-
-              <div className={styles.fieldGroup}>
-                <label className={styles.label} style={{ fontFamily: "'Amiri', serif" }}>
-                  المنطقة <span className="text-red-400">*</span>
-                </label>
-                <select
-                  name="area"
-                  value={formData.area}
-                  onChange={handleChange}
-                  disabled={!formData.governorate}
-                  className={styles.select}
-                  style={
-                    !formData.governorate
-                      ? { opacity: 0.5, cursor: 'not-allowed', fontFamily: "'Amiri', serif" }
-                      : { fontFamily: "'Amiri', serif" }
-                  }
-                >
-                  <option value="">اختر المنطقة</option>
-                  {areas.map((area) => (
-                    <option key={area} value={area}>{area}</option>
-                  ))}
-                </select>
-                {errors.area && <p className={styles.errorMessage}>{errors.area}</p>}
-              </div>
-
-              <div className={styles.fieldGroup}>
-                <label className={styles.label} style={{ fontFamily: "'Amiri', serif" }}>
-                  العنوان بالتفصيل <span className="text-red-400">*</span>
-                </label>
-                <textarea
-                  name="address"
-                  value={formData.address}
-                  onChange={handleChange}
-                  rows={3}
-                  className={styles.textarea}
-                  placeholder="الشارع، رقم المبنى، الدور، معالم قريبة..."
-                  style={{ fontFamily: "'Amiri', serif" }}
-                />
-                {errors.address && !errors.address.includes('منتج') && (
-                  <p className={styles.errorMessage}>{errors.address}</p>
-                )}
-              </div>
-
-              <div className={styles.quantitySection}>
-                <label className={styles.quantityLabel} style={{ fontFamily: "'Amiri', serif" }}>
-                  الكمية المطلوبة من كل منتج <span className="text-red-400">*</span>
-                </label>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className={styles.productCard}>
-                    <img src="/straight.jpg" alt="Aura" className={styles.productImage} />
-                    <p className={styles.productName} style={{ fontFamily: "'Cinzel', serif" }}>Aura</p>
-                    <div className="flex items-center justify-center gap-2">
-                      <label style={{ color: 'rgba(255,255,255,0.75)', fontSize: '0.875rem', fontFamily: "'Amiri', serif" }}>الكمية:</label>
-                      <input ref={straightRef} type="number" min="0" max="10" defaultValue="0" className={styles.quantityInput} />
-                    </div>
-                  </div>
-                  <div className={styles.productCard}>
-                    <img src="/curved.jpg" alt="Harmonia" className={styles.productImage} />
-                    <p className={styles.productName} style={{ fontFamily: "'Cinzel', serif" }}>Harmonia</p>
-                    <div className="flex items-center justify-center gap-2">
-                      <label style={{ color: 'rgba(255,255,255,0.75)', fontSize: '0.875rem', fontFamily: "'Amiri', serif" }}>الكمية:</label>
-                      <input ref={curvedRef} type="number" min="0" max="10" defaultValue="0" className={styles.quantityInput} />
-                    </div>
-                  </div>
-                  <div className={styles.productCard}>
-                    <img src="/curvedgold.jpg" alt="Sophia" className={styles.productImage} />
-                    <p className={styles.productName} style={{ fontFamily: "'Cinzel', serif" }}>Sophia</p>
-                    <p className={styles.productLabel} style={{ fontFamily: "'Amiri', serif" }}>حصري للنساء</p>
-                    <div className="flex items-center justify-center gap-2">
-                      <label style={{ color: 'rgba(255,255,255,0.75)', fontSize: '0.875rem', fontFamily: "'Amiri', serif" }}>الكمية:</label>
-                      <input ref={curvedGoldRef} type="number" min="0" max="10" defaultValue="0" className={styles.quantityInput} />
-                    </div>
-                  </div>
-                </div>
-                {errors.address && errors.address.includes('منتج') && (
-                  <p className={styles.errorMessage}>{errors.address}</p>
-                )}
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className={styles.submitButton}
-                style={{ fontFamily: "'Amiri', serif" }}
-              >
-                {isSubmitting ? 'جاري الإرسال...' : 'إرسال الطلب'}
-              </button>
-            </form>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 function BraceletSection({
   product,
@@ -443,8 +117,11 @@ function BraceletSection({
       </div>
 
       <div className="flex justify-center mt-12">
-        <button
-          onClick={onOrder}
+        <a
+          href="/order-bracelets.html"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block"
           style={{
             fontFamily: "'Amiri', serif",
             letterSpacing: '0.08em',
@@ -458,20 +135,21 @@ function BraceletSection({
             boxShadow: '0 2px 12px rgba(36,50,71,0.15)',
             transition: 'transform 0.3s ease, box-shadow 0.3s ease, background 0.3s ease',
             cursor: 'pointer',
+            textDecoration: 'none',
           }}
           onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-3px)';
-            (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 6px 24px rgba(36,50,71,0.25)';
-            (e.currentTarget as HTMLButtonElement).style.background = '#1a2b3c';
+            (e.currentTarget as HTMLAnchorElement).style.transform = 'translateY(-3px)';
+            (e.currentTarget as HTMLAnchorElement).style.boxShadow = '0 6px 24px rgba(36,50,71,0.25)';
+            (e.currentTarget as HTMLAnchorElement).style.background = '#1a2b3c';
           }}
           onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
-            (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 2px 12px rgba(36,50,71,0.15)';
-            (e.currentTarget as HTMLButtonElement).style.background = '#243247';
+            (e.currentTarget as HTMLAnchorElement).style.transform = 'translateY(0)';
+            (e.currentTarget as HTMLAnchorElement).style.boxShadow = '0 2px 12px rgba(36,50,71,0.15)';
+            (e.currentTarget as HTMLAnchorElement).style.background = '#243247';
           }}
         >
           أُطلب الآن
-        </button>
+        </a>
       </div>
     </div>
   );
@@ -479,13 +157,8 @@ function BraceletSection({
 
 export default function BraceletsPage() {
   const collectionRef = useRef<HTMLDivElement>(null);
-  const [orderModalOpen, setOrderModalOpen] = useState(false);
 
   const bracelets = products.filter((p) => p.collection === 'bracelets');
-
-  const scrollToCollection = () => {
-    collectionRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
 
   const benefits = [
     {
@@ -516,14 +189,6 @@ export default function BraceletsPage() {
       style={{ fontFamily: "'Amiri', serif" }}
       dir="rtl"
     >
-      <style>{`
-        @keyframes modalFadeIn {
-          from { opacity: 0; transform: scale(0.97) translateY(8px); }
-          to { opacity: 1; transform: scale(1) translateY(0); }
-        }
-      `}</style>
-
-      <OrderModal isOpen={orderModalOpen} onClose={() => setOrderModalOpen(false)} />
 
       {/* HERO */}
       <section
@@ -567,13 +232,15 @@ export default function BraceletsPage() {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4">
-              <button
-                onClick={() => setOrderModalOpen(true)}
-                className="px-10 py-4 bg-[#243247] text-[#e7ddcc] font-semibold transition-all duration-300 hover:bg-[#1a2b3c] hover:shadow-xl hover:-translate-y-0.5"
+              <a
+                href="/order-bracelets.html"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-10 py-4 bg-[#243247] text-[#e7ddcc] font-semibold transition-all duration-300 hover:bg-[#1a2b3c] hover:shadow-xl hover:-translate-y-0.5 inline-block text-center"
                 style={{ fontFamily: "'amiri', serif", letterSpacing: '0.1em', fontSize: '0.85rem' }}
               >
                 أُطلب قطعتك
-              </button>
+              </a>
               <a
                 href="/"
                 className="px-10 py-4 border border-[#243247] text-[#243247] font-semibold transition-all duration-300 hover:bg-[#243247] hover:text-[#e7ddcc] hover:opacity-90 inline-block text-center"
@@ -643,7 +310,7 @@ export default function BraceletsPage() {
                 key={product.id}
                 product={product}
                 index={index}
-                onOrder={() => setOrderModalOpen(true)}
+                onOrder={() => window.open('/order-bracelets.html', '_blank')}
               />
             ))}
           </div>
@@ -743,13 +410,15 @@ export default function BraceletsPage() {
             >
               اختر قطعتك وانضم إلى من يحملون الأصالة
             </p>
-            <button
-              onClick={() => setOrderModalOpen(true)}
-              className="px-10 py-3 border border-[#243247] text-[#243247] font-semibold transition-all duration-300 hover:bg-[#243247] hover:text-[#e7ddcc] hover:-translate-y-0.5"
-              style={{ fontFamily: "'amiri', serif", letterSpacing: '0.1em', fontSize: '0.85rem' }}
+            <a
+              href="/order-bracelets.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block px-10 py-3 border border-[#243247] text-[#243247] font-semibold transition-all duration-300 hover:bg-[#243247] hover:text-[#e7ddcc] hover:-translate-y-0.5"
+              style={{ fontFamily: "'amiri', serif", letterSpacing: '0.1em', fontSize: '0.85rem', textDecoration: 'none' }}
             >
               أُطلب الآن
-            </button>
+            </a>
           </div>
         </div>
       </section>
@@ -764,13 +433,15 @@ export default function BraceletsPage() {
             >
               لا تؤجل لحظة الأناقة — قطعتك في انتظارك
             </p>
-            <button
-              onClick={() => setOrderModalOpen(true)}
-              className="px-10 py-3 bg-[#e7ddcc] text-[#243247] font-semibold transition-all duration-300 hover:bg-white hover:-translate-y-0.5 hover:shadow-lg"
-              style={{ fontFamily: "'amiri', serif", letterSpacing: '0.1em', fontSize: '0.85rem' }}
+            <a
+              href="/order-bracelets.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block px-10 py-3 bg-[#e7ddcc] text-[#243247] font-semibold transition-all duration-300 hover:bg-white hover:-translate-y-0.5 hover:shadow-lg"
+              style={{ fontFamily: "'amiri', serif", letterSpacing: '0.1em', fontSize: '0.85rem', textDecoration: 'none' }}
             >
               أُطلب الآن
-            </button>
+            </a>
           </div>
 
           <div className="text-center mb-10">
